@@ -1,0 +1,79 @@
+version: '3.9'
+
+services:
+  camunda-db:
+    image: postgres:16.6
+    container_name: camunda-db
+    environment:
+      POSTGRES_USER: camunda
+      POSTGRES_PASSWORD: camunda
+      POSTGRES_DB: camunda
+    ports:
+      - '5432:5432'
+    volumes:
+      - camunda_db_data:/var/lib/postgresql/data
+    networks:
+      - camunda_network
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14.0
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '8000:80'
+    depends_on:
+      - camunda-db
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - camunda_network
+
+  camunda-engine:
+    image: camunda/camunda-bpm-platform:run-7.22.0
+    container_name: camunda-engine
+    depends_on:
+      - camunda-db
+      - pgadmin
+    environment:
+      DB_DRIVER: org.postgresql.Driver
+      DB_URL: jdbc:postgresql://camunda-db:5432/camunda
+      DB_USERNAME: camunda
+      DB_PASSWORD: camunda
+    ports:
+      - '8080:8080'
+    networks:
+      - camunda_network
+
+  app:
+    image: camunda_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-container
+    depends_on:
+      - camunda-db
+      - pgadmin
+      - camunda-engine
+    ports:
+      - '3000:3000' # Expose the app on localhost:3000
+    volumes:
+      - .:/usr/src/app # Map the current directory to the container's app directory
+      # - /usr/src/app/node_modules # Prevent overwriting node_modules inside the container
+    command: pnpm run start:dev # Start the app in development mode
+    networks:
+      - camunda_network
+
+networks:
+  camunda_network:
+    name: camunda_network
+    driver: bridge
+
+volumes:
+  camunda_db_data:
+    name: camunda_db_data
+  pgadmin-data:
+    name: pgadmin-data
+  # camunda_app_node_modules:
+  #   name: camunda_app_node_modules
